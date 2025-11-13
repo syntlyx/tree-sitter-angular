@@ -10,12 +10,21 @@
 const HTML = require('tree-sitter-html/grammar');
 
 const PREC = {
+  TERNARY: 0,
   CALL: 1,
-  ALIAS: 2,
+  BINARY: 2,
+  ALIAS: 3,
+  MEMBER: 4,
 };
 
 module.exports = grammar(HTML, {
   name: 'angular',
+
+  conflicts: $ => [
+    [$.ternary_expression, $._primitive],
+    [$.pipe_call],
+    [$.pipe_arguments],
+  ],
 
   externals: ($, original) =>
     original.concat([
@@ -275,13 +284,19 @@ module.exports = grammar(HTML, {
       ),
 
     assignment_expression: ($) =>
-      seq(field('name', $.identifier), '=', field('value', $._any_expression)),
+      prec.right(
+        seq(
+          field('name', choice($.member_expression, $.identifier)),
+          '=',
+          field('value', $._any_expression),
+        ),
+      ),
 
     // -------- ICU expressions ---------
     icu_expression: ($) =>
       seq(
         '{',
-        choice($._any_expression, $.concatenation_expression),
+        $._any_expression,
         ',',
         $.icu_clause,
         ',',
@@ -299,14 +314,8 @@ module.exports = grammar(HTML, {
     interpolation: ($) =>
       seq(
         alias($._interpolation_start, '{{'),
-        choice($._any_expression, $.concatenation_expression),
+        $._any_expression,
         alias($._interpolation_end, '}}'),
-      ),
-
-    concatenation_expression: ($) =>
-      prec(
-        2,
-        seq($._primitive, '+', $.expression, optional(repeat(seq('+', $._primitive)))),
       ),
 
     // ---------- Property Binding ---------
@@ -426,7 +435,7 @@ module.exports = grammar(HTML, {
     // Binary expression
     binary_expression: ($) =>
       prec.left(
-        PREC.CALL,
+        PREC.BINARY,
         seq(
           field('left', $.expression),
           field('operator', $._binary_op),
@@ -437,13 +446,22 @@ module.exports = grammar(HTML, {
     // Ternary expression
     ternary_expression: ($) =>
       prec.right(
-        PREC.CALL,
-        seq(
-          field('condition', $._any_expression),
-          alias('?', $.ternary_operator),
-          field('consequence', choice($.group, $._primitive)),
-          alias(':', $.ternary_operator),
-          field('alternative', choice($.group, $._any_expression)),
+        PREC.TERNARY,
+        prec.dynamic(2, 
+          seq(
+            field('condition', choice(
+              $.group,
+              $.binary_expression,
+              $.unary_expression,
+              $.expression,
+              $.nullish_coalescing_expression,
+              $.conditional_expression,
+            )),
+            alias('?', $.ternary_operator),
+            field('consequence', choice($.group, $._primitive, $.binary_expression)),
+            alias(':', $.ternary_operator),
+            field('alternative', choice($.group, $._any_expression)),
+          ),
         ),
       ),
 
@@ -553,7 +571,7 @@ module.exports = grammar(HTML, {
     number: () => /[0-9]+\.?[0-9]*/,
 
     // Group
-    group: ($) => seq('(', $._any_expression, ')'),
+    group: ($) => prec(10, seq('(', $._any_expression, ')')),
 
     // Call expression
     call_expression: ($) =>
@@ -574,12 +592,15 @@ module.exports = grammar(HTML, {
 
     // Member expression
     member_expression: ($) =>
-      seq(
-        field('object', $._primitive),
-        choice(
-          seq(
-            choice('.', '?.', '!.'),
-            choice(field('property', $.identifier), field('call', $.call_expression)),
+      prec.left(
+        PREC.MEMBER,
+        seq(
+          field('object', choice($._primitive, $.member_expression)),
+          choice(
+            seq(
+              choice('.', '?.', '!.'),
+              choice(field('property', $.identifier), field('call', $.call_expression)),
+            ),
           ),
         ),
       ),

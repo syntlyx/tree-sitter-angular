@@ -138,18 +138,19 @@ Grouping
     (start_tag
       (tag_name))
     (interpolation
-      (concatenation_expression
-        (group
-          (expression
-            (member_expression
-              (group
-                (expression
-                  (identifier)
-                  (pipe_sequence
-                    (pipe_operator)
-                    (pipe_call
-                      (identifier)))))
-              (identifier))))
+      (binary_expression
+        (expression
+          (group
+            (expression
+              (member_expression
+                (group
+                  (expression
+                    (identifier)
+                    (pipe_sequence
+                      (pipe_operator)
+                      (pipe_call
+                        (identifier)))))
+                (identifier)))))
         (expression
          (string))))
     (end_tag
@@ -196,11 +197,14 @@ String concatenation
     (start_tag
       (tag_name))
     (interpolation
-      (concatenation_expression
-        (string)
+      (binary_expression
         (expression
-          (identifier))
-        (string)))
+          (string))
+        (binary_expression
+          (expression
+            (identifier))
+          (expression
+            (string)))))
     (end_tag
       (tag_name))))
 
@@ -214,8 +218,9 @@ String concat with pipes
 
 (document
   (interpolation
-    (concatenation_expression
-      (string)
+    (binary_expression
+      (expression
+        (string))
       (expression
         (member_expression
           (identifier)
@@ -241,3 +246,42 @@ Exponentiation
      (identifier))
     (expression
      (identifier)))))
+
+========================
+String concat with expression
+========================
+
+{{ this.string + (this.string.length < 0) ? ', ' + this.element : '' }}
+
+---
+
+(document
+  (interpolation
+  (ternary_expression
+    (binary_expression
+    (expression
+      (member_expression
+      (identifier)
+      (identifier)))
+    (expression
+      (group
+      (binary_expression
+        (expression
+        (member_expression
+          (member_expression
+          (identifier)
+          (identifier))
+          (identifier)))
+        (expression
+        (identifier))))))
+    (ternary_operator)
+    (binary_expression
+    (expression
+      (string))
+    (expression
+      (member_expression
+      (identifier)
+      (identifier))))
+    (ternary_operator)
+    (expression
+    (string)))))
